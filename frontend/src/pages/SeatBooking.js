@@ -33,7 +33,7 @@ const SeatBooking = () => {
 
   const fetchSeats = useCallback(async () => {
     try {
-      const response = await fetch('http://localhost:3001/api/seats', {
+      const response = await fetch('https://train-reservation-wsrg.onrender.com/api/seats', {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -96,7 +96,7 @@ const SeatBooking = () => {
     }
 
     try {
-      const response = await fetch('http://localhost:3001/api/seats/book', {
+      const response = await fetch('https://train-reservation-wsrg.onrender.com:3001/api/seats/book', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
