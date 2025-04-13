@@ -29,6 +29,7 @@ const SeatBooking = () => {
   const [seats, setSeats] = useState([]);
   const [numberOfSeats, setNumberOfSeats] = useState(1);
   const [allocatedSeats, setAllocatedSeats] = useState([]);
+  const [sessionBookedSeats, setSessionBookedSeats] = useState([]);
   const toast = useToast();
 
   const fetchSeats = useCallback(async () => {
@@ -113,6 +114,8 @@ const SeatBooking = () => {
         throw new Error(data.message || 'Failed to book seats');
       }
 
+      setSessionBookedSeats(prev => [...prev, ...allocatedSeats]);
+
       toast({
         title: 'Success',
         description: `Seats ${allocatedSeats.join(', ')} booked successfully`,
@@ -132,6 +135,27 @@ const SeatBooking = () => {
         isClosable: true,
       });
     }
+  };
+
+  const handleResetSeats = () => {
+    setSeats(prevSeats => 
+      prevSeats.map(seat => ({
+        ...seat,
+        isBooked: sessionBookedSeats.includes(seat.id) ? true : false
+      }))
+    );
+    
+    setAllocatedSeats([]);
+    setNumberOfSeats(1);
+    setSessionBookedSeats([]);
+    
+    toast({
+      title: 'Reset',
+      description: 'All selected and booked seats in this session have been cleared',
+      status: 'info',
+      duration: 2000,
+      isClosable: true,
+    });
   };
 
   const totalSeats = 80;
@@ -219,6 +243,40 @@ const SeatBooking = () => {
                 <VStack spacing={6} align="stretch">
                   <Heading size="md" color="blue.600">Booking Details</Heading>
                   
+                  <HStack spacing={4} justify="center" mb={4}>
+                    <Box
+                      p={4}
+                      borderRadius="lg"
+                      bg="blue.50"
+                      boxShadow="sm"
+                      minW="150px"
+                      textAlign="center"
+                    >
+                      <Text fontSize="sm" color="blue.600" fontWeight="medium">Booked Seats</Text>
+                      <Text fontSize="2xl" color="blue.700" fontWeight="bold">
+                        {seats.filter(seat => seat.isBooked).length}
+                      </Text>
+                      {sessionBookedSeats.length > 0 && (
+                        <Text fontSize="xs" color="blue.500" mt={1}>
+                          (Session: {sessionBookedSeats.length})
+                        </Text>
+                      )}
+                    </Box>
+                    <Box
+                      p={4}
+                      borderRadius="lg"
+                      bg="green.50"
+                      boxShadow="sm"
+                      minW="150px"
+                      textAlign="center"
+                    >
+                      <Text fontSize="sm" color="green.600" fontWeight="medium">Available Seats</Text>
+                      <Text fontSize="2xl" color="green.700" fontWeight="bold">
+                        {seats.filter(seat => !seat.isBooked).length}
+                      </Text>
+                    </Box>
+                  </HStack>
+
                   <FormControl>
                     <FormLabel color="gray.700">Number of Seats</FormLabel>
                     <NumberInput
@@ -250,6 +308,15 @@ const SeatBooking = () => {
                       </Text>
                     </Box>
                   )}
+
+                  <Button
+                    colorScheme="gray"
+                    variant="outline"
+                    onClick={handleResetSeats}
+                    mb={4}
+                  >
+                    Reset Selection
+                  </Button>
 
                   <Button
                     colorScheme="blue"

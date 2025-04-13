@@ -29,5 +29,9 @@ router.get('/', seatController.getAllSeats);
 
 router.post('/book', bookingValidation, seatController.bookSeats);
 router.post('/cancel', bookingValidation, seatController.cancelBooking);
+router.post('/unselect', bookingValidation, seatController.unselectSeats);
+router.post('/reset', seatController.resetSeats);
+router.post('/reset-database', seatController.resetDatabase);
+router.post('/reset-selected', seatController.resetSelectedSeats);
 
 module.exports = router; 
