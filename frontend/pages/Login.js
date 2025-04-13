@@ -23,7 +23,18 @@ const Login = () => {
 
   return (
     <div className="login-container">
-      <h2>Login</h2>
+      <div className="login-header">
+        <img 
+          src={process.env.PUBLIC_URL + "/images/img train.jpg"} 
+          alt="Train" 
+          className="train-image"
+          onError={(e) => {
+            console.error("Image failed to load");
+            e.target.style.display = 'none';
+          }}
+        />
+        <h2>Login</h2>
+      </div>
       {error && <div className="error-message">{error}</div>}
       <form onSubmit={handleSubmit}>
         <div className="form-group">

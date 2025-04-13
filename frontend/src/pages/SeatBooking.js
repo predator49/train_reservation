@@ -96,7 +96,7 @@ const SeatBooking = () => {
     }
 
     try {
-      const response = await fetch('https://train-reservation-wsrg.onrender.com:3001/api/seats/book', {
+      const response = await fetch('https://train-reservation-wsrg.onrender.com/api/seats/book', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
