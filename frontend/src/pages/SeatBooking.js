@@ -23,6 +23,7 @@ import {
   Flex,
   Tooltip,
 } from '@chakra-ui/react';
+import { useNavigate } from 'react-router-dom';
 
 const SeatBooking = () => {
   const { user, logout } = useAuth();
@@ -30,27 +31,70 @@ const SeatBooking = () => {
   const [numberOfSeats, setNumberOfSeats] = useState(1);
   const [allocatedSeats, setAllocatedSeats] = useState([]);
   const [sessionBookedSeats, setSessionBookedSeats] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState('');
   const toast = useToast();
+  const navigate = useNavigate();
 
   const fetchSeats = useCallback(async () => {
+    if (!user) {
+      setError('Please login to view seats');
+      setIsLoading(false);
+      navigate('/login');
+      return;
+    }
+
     try {
+      setIsLoading(true);
+      const token = localStorage.getItem('token');
+      if (!token) {
+        setError('Please login to view seats');
+        navigate('/login');
+        return;
+      }
+
+      console.log('Fetching seats with token:', token); // Debug log
+
       const response = await fetch('https://train-reservation-wsrg.onrender.com/api/seats', {
+        method: 'GET',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
         }
       });
+
+      console.log('Seats response status:', response.status); // Debug log
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          console.log('Unauthorized - redirecting to login'); // Debug log
+          localStorage.removeItem('token');
+          setError('Please login to view seats');
+          navigate('/login');
+          return;
+        }
+        throw new Error('Failed to fetch seats');
+      }
+
       const data = await response.json();
-      setSeats(data);
+      console.log('Seats data:', data); // Debug log
+
+      if (Array.isArray(data)) {
+        setSeats(data);
+        setError('');
+      } else {
+        console.error('Invalid seats data format:', data); // Debug log
+        setSeats([]);
+        setError('Invalid response format');
+      }
     } catch (error) {
-      toast({
-        title: 'Error',
-        description: 'Failed to fetch seats',
-        status: 'error',
-        duration: 3000,
-        isClosable: true,
-      });
+      console.error('Error fetching seats:', error);
+      setError('Failed to fetch seats. Please try again.');
+      setSeats([]);
+    } finally {
+      setIsLoading(false);
     }
-  }, [toast]);
+  }, [user, navigate]);
 
   useEffect(() => {
     fetchSeats();
@@ -118,7 +162,10 @@ const SeatBooking = () => {
 
       toast({
         title: 'Success',
-        description: `Seats ${allocatedSeats.join(', ')} booked successfully`,
+        description: `Seats ${allocatedSeats.map(id => {
+          const seat = seats.find(s => s.id === id);
+          return seat ? seat.seatNumber : id;
+        }).join(', ')} booked successfully`,
         status: 'success',
         duration: 3000,
         isClosable: true,
@@ -137,36 +184,101 @@ const SeatBooking = () => {
     }
   };
 
-  const handleResetSeats = () => {
-    setSeats(prevSeats => 
-      prevSeats.map(seat => ({
-        ...seat,
-        isBooked: sessionBookedSeats.includes(seat.id) ? true : false
-      }))
-    );
-    
-    setAllocatedSeats([]);
-    setNumberOfSeats(1);
-    setSessionBookedSeats([]);
-    
-    toast({
-      title: 'Reset',
-      description: 'All selected and booked seats in this session have been cleared',
-      status: 'info',
-      duration: 2000,
-      isClosable: true,
-    });
+  const handleResetSeats = async () => {
+    if (!user) {
+      setError('Please login to reset seats');
+      navigate('/login');
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        setError('Please login to reset seats');
+        navigate('/login');
+        return;
+      }
+
+      const response = await fetch('https://train-reservation-wsrg.onrender.com/api/seats/reset', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          setError('Please login to reset seats');
+          navigate('/login');
+          return;
+        }
+        throw new Error('Failed to reset seats');
+      }
+
+      const data = await response.json();
+      
+      // Update the frontend state with the reset data from backend
+      setSeats(prevSeats => 
+        prevSeats.map(seat => ({
+          ...seat,
+          isBooked: false
+        }))
+      );
+      
+      setAllocatedSeats([]);
+      setNumberOfSeats(1);
+      setSessionBookedSeats([]);
+      
+      toast({
+        title: 'Success',
+        description: 'All seats have been reset successfully',
+        status: 'success',
+        duration: 2000,
+        isClosable: true,
+      });
+
+      // Refresh the seats data from the backend
+      fetchSeats();
+    } catch (error) {
+      console.error('Reset error:', error);
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to reset seats',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      });
+    }
   };
 
+  // Calculate total seats and rows
   const totalSeats = 80;
   const seatsPerRow = 7;
   const rows = Math.ceil(totalSeats / seatsPerRow);
   
-  const seatRows = Array.from({ length: rows }, (_, rowIndex) => {
+  // Only create seatRows if seats is an array
+  const seatRows = Array.isArray(seats) ? Array.from({ length: rows }, (_, rowIndex) => {
     const start = rowIndex * seatsPerRow;
     const end = Math.min(start + seatsPerRow, totalSeats);
     return seats.slice(start, end);
-  });
+  }) : [];
+
+  if (isLoading) {
+    return (
+      <Container maxW="container.xl" py={8}>
+        <Text>Loading seats...</Text>
+      </Container>
+    );
+  }
+
+  if (error) {
+    return (
+      <Container maxW="container.xl" py={8}>
+        <Text color="red.500">{error}</Text>
+      </Container>
+    );
+  }
 
   return (
     <Container maxW="container.xl" py={8}>
@@ -227,7 +339,7 @@ const SeatBooking = () => {
                               isDisabled={true}
                               _hover={{ cursor: 'default' }}
                             >
-                              {seat.id}
+                              {seat.seatNumber}
                             </Button>
                           </Tooltip>
                         ))}
@@ -304,7 +416,10 @@ const SeatBooking = () => {
                         Allocated Seats:
                       </Text>
                       <Text fontSize="lg" color="blue.600">
-                        {allocatedSeats.join(', ')}
+                        {allocatedSeats.map(id => {
+                          const seat = seats.find(s => s.id === id);
+                          return seat ? seat.seatNumber : id;
+                        }).join(', ')}
                       </Text>
                     </Box>
                   )}

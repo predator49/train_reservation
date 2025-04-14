@@ -1,7 +1,7 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider } from './context/AuthContext';
-import { useAuth } from './context/AuthContext';
+import { AuthProvider } from '../src/context/AuthContext';
+import { useAuth } from '../src/context/AuthContext';
 
 // Import pages
 import Login from './pages/Login';

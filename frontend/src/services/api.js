@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const api = axios.create({
-  baseURL: 'http://localhost:3001/api',
+  baseURL: 'https://train-reservation-wsrg.onrender.com/api',
   headers: {
     'Content-Type': 'application/json',
   },
@@ -33,6 +33,12 @@ api.interceptors.response.use(
     return Promise.reject(error);
   }
 );
+
+export const authAPI = {
+  login: (credentials) => api.post('/auth/login', credentials),
+  register: (userData) => api.post('/auth/register', userData),
+  logout: () => api.post('/auth/logout')
+};
 
 export const seatAPI = {
   getAllSeats: () => api.get('/seats'),

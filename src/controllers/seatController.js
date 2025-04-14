@@ -254,53 +254,44 @@ exports.resetSelectedSeats = async (req, res) => {
   try {
     const { seatIds } = req.body;
 
-    if (!seatIds || !Array.isArray(seatIds)) {
+    if (!seatIds || !Array.isArray(seatIds) || seatIds.length === 0) {
       return res.status(400).json({ message: 'Please provide valid seat IDs' });
     }
 
-    // First, verify the seats exist
-    const existingSeats = await Seat.findAll({
+    // Check if the seats exist
+    const seats = await Seat.findAll({
       where: { id: seatIds },
       transaction: t
     });
 
-    if (existingSeats.length !== seatIds.length) {
+    if (seats.length !== seatIds.length) {
       await t.rollback();
       return res.status(400).json({ message: 'One or more seats not found' });
     }
 
-    // Update all seats in a single query
-    const [updatedCount] = await Seat.update(
-      {
+    // Reset the selected seats
+    await Promise.all(seats.map(seat =>
+      seat.update({
         isBooked: false,
         bookedBy: null
-      },
-      {
-        where: { id: seatIds },
-        transaction: t
-      }
-    );
-
-    if (updatedCount === 0) {
-      await t.rollback();
-      return res.status(400).json({ message: 'No seats were updated' });
-    }
+      }, { transaction: t })
+    ));
 
     await t.commit();
-    
-    // Fetch the updated seats
+
+    // Fetch updated seats
     const updatedSeats = await Seat.findAll({
       where: { id: seatIds },
-      attributes: ['id', 'seatNumber', 'rowNumber', 'isBooked', 'bookedBy']
+      attributes: ['id', 'seatNumber', 'rowNumber', 'isBooked', 'bookedBy'],
+      raw: true
     });
 
-    res.json({ 
+    res.json({
       message: 'Selected seats have been reset successfully',
       seats: updatedSeats
     });
   } catch (error) {
     await t.rollback();
-    console.error('Reset selected seats error:', error);
     res.status(500).json({ message: 'Error resetting selected seats', error: error.message });
   }
 };
@@ -357,7 +348,7 @@ exports.resetDatabase = async (req, res) => {
     });
 
     res.json({
-      message: 'Database reset successfully',
+      message: 'All seats have been reset successfully',
       seats: allSeats
     });
   } catch (error) {

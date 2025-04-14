@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { authAPI } from '../services/api';
 import {
   Box,
   Button,
@@ -34,42 +35,30 @@ const Login = () => {
     setIsLoading(true);
 
     try {
-      const response = await fetch('https://train-reservation-wsrg.onrender.com/api/auth/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          email: email.trim(),
-          password: password.trim(),
-        }),
+      const response = await authAPI.login({
+        email: email.trim(),
+        password: password.trim()
       });
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        if (response.status === 401) {
-          throw new Error('Invalid email or password');
-        }
-        throw new Error(data.message || 'Login failed');
+      if (response.data) {
+        localStorage.setItem('token', response.data.token);
+        login({ email: email.trim(), token: response.data.token });
+        
+        toast({
+          title: 'Login Successful',
+          description: 'Welcome back!',
+          status: 'success',
+          duration: 3000,
+          isClosable: true,
+        });
+        
+        navigate('/');
       }
-
-      localStorage.setItem('token', data.token);
-      login({ email: email.trim(), token: data.token });
-      
-      toast({
-        title: 'Login Successful',
-        description: 'Welcome back!',
-        status: 'success',
-        duration: 3000,
-        isClosable: true,
-      });
-      
-      navigate('/');
     } catch (err) {
+      console.error('Login error:', err);
       toast({
         title: 'Login Failed',
-        description: err.message,
+        description: err.response?.data?.message || 'Invalid email or password',
         status: 'error',
         duration: 3000,
         isClosable: true,
