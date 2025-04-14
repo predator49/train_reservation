@@ -15,8 +15,10 @@ const SeatBooking = () => {
     const fetchSeats = async () => {
       try {
         const response = await seatAPI.getAllSeats();
+        console.log('Fetched seats:', response.data); // Debug log
         setSeats(response.data);
       } catch (err) {
+        console.error('Error fetching seats:', err); // Debug log
         setError('Failed to fetch seats');
       }
     };
@@ -77,7 +79,7 @@ const SeatBooking = () => {
     }
 
     // If not enough in current row, look for nearby seats
-    while (remainingSeats > 0 && row <=11) {
+    while (remainingSeats > 0 && row <11) {
       const availableInRow = getAvailableSeatsInRow(row);
       const seatsToTake = Math.min(availableInRow.length, remainingSeats);
       
