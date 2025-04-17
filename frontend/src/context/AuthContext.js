@@ -11,16 +11,18 @@ export const AuthProvider = ({ children }) => {
   });
 
   const login = (userData) => {
-    console.log('Logging in user:', userData); // Debug log
+    console.log('Logging in user:', userData);
+    if (!userData.token || !userData.token.startsWith('Bearer ')) {
+      console.error('Invalid token format');
+      return;
+    }
     setUser(userData);
     localStorage.setItem('user', JSON.stringify(userData));
-    if (userData.token) {
-      localStorage.setItem('token', userData.token);
-    }
+    localStorage.setItem('token', userData.token);
   };
 
   const logout = () => {
-    console.log('Logging out user'); // Debug log
+    console.log('Logging out user');
     setUser(null);
     localStorage.removeItem('user');
     localStorage.removeItem('token');
@@ -35,23 +37,16 @@ export const AuthProvider = ({ children }) => {
         
         if (storedUser && storedToken) {
           const userData = JSON.parse(storedUser);
-          // Verify the token is still valid
-          if (userData.token === storedToken) {
+          if (userData.token === storedToken && storedToken.startsWith('Bearer ')) {
             setUser(userData);
           } else {
-            console.log('Token mismatch - logging out'); // Debug log
-            localStorage.removeItem('user');
-            localStorage.removeItem('token');
+            console.log('Token mismatch or invalid format - logging out');
+            logout();
           }
-        } else {
-          console.log('No stored user or token - not logged in'); // Debug log
-          localStorage.removeItem('user');
-          localStorage.removeItem('token');
         }
       } catch (error) {
-        console.error('Auth check error:', error); // Debug log
-        localStorage.removeItem('user');
-        localStorage.removeItem('token');
+        console.error('Auth check error:', error);
+        logout();
       }
     };
 
@@ -66,5 +61,9 @@ export const AuthProvider = ({ children }) => {
 };
 
 export const useAuth = () => {
-  return useContext(AuthContext);
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
 }; 

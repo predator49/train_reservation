@@ -47,29 +47,41 @@ const SeatBooking = () => {
     try {
       setIsLoading(true);
       const token = localStorage.getItem('token');
+      
+      // Check if token exists
       if (!token) {
+        console.log('No token found - redirecting to login');
         setError('Please login to view seats');
         navigate('/login');
         return;
       }
 
-      console.log('Fetching seats with token:', token); // Debug log
+      // Validate token format
+      if (!token.startsWith('Bearer ')) {
+        console.log('Invalid token format - redirecting to login');
+        localStorage.removeItem('token');
+        setError('Please login to view seats');
+        navigate('/login');
+        return;
+      }
+
+      console.log('Fetching seats with token:', token);
 
       const response = await fetch('https://train-reservation-wsrg.onrender.com/api/seats', {
         method: 'GET',
         headers: {
-          'Authorization': `Bearer ${token}`,
+          'Authorization': token,
           'Content-Type': 'application/json'
         }
       });
 
-      console.log('Seats response status:', response.status); // Debug log
+      console.log('Seats response status:', response.status);
 
       if (!response.ok) {
         if (response.status === 401) {
-          console.log('Unauthorized - redirecting to login'); // Debug log
+          console.log('Token expired or invalid - redirecting to login');
           localStorage.removeItem('token');
-          setError('Please login to view seats');
+          setError('Your session has expired. Please login again.');
           navigate('/login');
           return;
         }
@@ -77,19 +89,25 @@ const SeatBooking = () => {
       }
 
       const data = await response.json();
-      console.log('Seats data:', data); // Debug log
+      console.log('Seats data:', data);
 
       if (Array.isArray(data)) {
         setSeats(data);
         setError('');
       } else {
-        console.error('Invalid seats data format:', data); // Debug log
+        console.error('Invalid seats data format:', data);
         setSeats([]);
         setError('Invalid response format');
       }
     } catch (error) {
       console.error('Error fetching seats:', error);
-      setError('Failed to fetch seats. Please try again.');
+      if (error.message.includes('401')) {
+        localStorage.removeItem('token');
+        setError('Your session has expired. Please login again.');
+        navigate('/login');
+      } else {
+        setError('Failed to fetch seats. Please try again.');
+      }
       setSeats([]);
     } finally {
       setIsLoading(false);
@@ -102,20 +120,71 @@ const SeatBooking = () => {
 
   const findAdjacentSeats = (numSeats) => {
     const availableSeats = seats.filter(seat => !seat.isBooked);
-    const sortedSeats = [...availableSeats].sort((a, b) => a.id - b.id);
+    const sortedSeats = [...availableSeats].sort((a, b) => a.seatNumber - b.seatNumber);
     
-    for (let i = 0; i <= sortedSeats.length - numSeats; i++) {
-      const potentialGroup = sortedSeats.slice(i, i + numSeats);
-      const isAdjacent = potentialGroup.every((seat, index) => {
-        if (index === 0) return true;
-        return seat.id === potentialGroup[index - 1].id + 1;
-      });
+    // Group seats by row
+    const seatsByRow = {};
+    sortedSeats.forEach(seat => {
+      if (!seatsByRow[seat.rowNumber]) {
+        seatsByRow[seat.rowNumber] = [];
+      }
+      seatsByRow[seat.rowNumber].push(seat);
+    });
+
+    // Sort rows by number
+    const sortedRowNumbers = Object.keys(seatsByRow).sort((a, b) => a - b);
+
+    // Try to find seats in each row
+    for (const rowNumber of sortedRowNumbers) {
+      const rowSeats = seatsByRow[rowNumber];
       
-      if (isAdjacent) {
-        return potentialGroup.map(seat => seat.id);
+      // If we can find enough consecutive seats in this row
+      if (rowSeats.length >= numSeats) {
+        // Try to find the first group of consecutive seats
+        for (let i = 0; i <= rowSeats.length - numSeats; i++) {
+          const potentialGroup = rowSeats.slice(i, i + numSeats);
+          const isConsecutive = potentialGroup.every((seat, index) => {
+            if (index === 0) return true;
+            return seat.seatNumber === potentialGroup[index - 1].seatNumber + 1;
+          });
+
+          if (isConsecutive) {
+            return potentialGroup.map(seat => seat.id);
+          }
+        }
       }
     }
-    
+
+    // If we couldn't find enough consecutive seats in any row, try the next row
+    for (let i = 0; i < sortedRowNumbers.length; i++) {
+      const currentRow = parseInt(sortedRowNumbers[i]);
+      const nextRow = parseInt(sortedRowNumbers[i + 1]);
+      
+      if (nextRow) {
+        const currentRowSeats = seatsByRow[currentRow];
+        const nextRowSeats = seatsByRow[nextRow];
+        
+        // If we can combine seats from current and next row
+        if (currentRowSeats.length + nextRowSeats.length >= numSeats) {
+          const combinedSeats = [...currentRowSeats, ...nextRowSeats]
+            .sort((a, b) => a.seatNumber - b.seatNumber);
+          
+          // Try to find consecutive seats in the combined set
+          for (let j = 0; j <= combinedSeats.length - numSeats; j++) {
+            const potentialGroup = combinedSeats.slice(j, j + numSeats);
+            const isConsecutive = potentialGroup.every((seat, index) => {
+              if (index === 0) return true;
+              return seat.seatNumber === potentialGroup[index - 1].seatNumber + 1;
+            });
+
+            if (isConsecutive) {
+              return potentialGroup.map(seat => seat.id);
+            }
+          }
+        }
+      }
+    }
+
     return null;
   };
 
@@ -141,22 +210,36 @@ const SeatBooking = () => {
     }
 
     try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        setError('Please login to book seats');
+        navigate('/login');
+        return;
+      }
+
       const response = await fetch('https://train-reservation-wsrg.onrender.com/api/seats/book', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': token
         },
         body: JSON.stringify({
           seatIds: allocatedSeats
         })
       });
 
-      const data = await response.json();
-
       if (!response.ok) {
+        if (response.status === 401) {
+          localStorage.removeItem('token');
+          setError('Your session has expired. Please login again.');
+          navigate('/login');
+          return;
+        }
+        const data = await response.json();
         throw new Error(data.message || 'Failed to book seats');
       }
+
+      const data = await response.json();
 
       setSessionBookedSeats(prev => [...prev, ...allocatedSeats]);
 
@@ -174,6 +257,7 @@ const SeatBooking = () => {
       fetchSeats();
       setAllocatedSeats([]);
     } catch (error) {
+      console.error('Booking error:', error);
       toast({
         title: 'Error',
         description: error.message,
@@ -202,14 +286,15 @@ const SeatBooking = () => {
       const response = await fetch('https://train-reservation-wsrg.onrender.com/api/seats/reset', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${token}`,
+          'Authorization': token,
           'Content-Type': 'application/json'
         }
       });
 
       if (!response.ok) {
         if (response.status === 401) {
-          setError('Please login to reset seats');
+          localStorage.removeItem('token');
+          setError('Your session has expired. Please login again.');
           navigate('/login');
           return;
         }

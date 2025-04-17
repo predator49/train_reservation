@@ -41,8 +41,13 @@ const Login = () => {
       });
 
       if (response.data) {
-        localStorage.setItem('token', response.data.token);
-        login({ email: email.trim(), token: response.data.token });
+        const token = `Bearer ${response.data.token}`;
+        localStorage.setItem('token', token);
+        login({ 
+          email: email.trim(), 
+          id: response.data.id,
+          token: token 
+        });
         
         toast({
           title: 'Login Successful',
