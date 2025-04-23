@@ -120,72 +120,129 @@ const SeatBooking = () => {
 
   const findAdjacentSeats = (numSeats) => {
     const availableSeats = seats.filter(seat => !seat.isBooked);
+    const bookedSeats = seats.filter(seat => seat.isBooked);
     const sortedSeats = [...availableSeats].sort((a, b) => a.seatNumber - b.seatNumber);
     
-    // Group seats by row
-    const seatsByRow = {};
-    sortedSeats.forEach(seat => {
-      if (!seatsByRow[seat.rowNumber]) {
-        seatsByRow[seat.rowNumber] = [];
-      }
-      seatsByRow[seat.rowNumber].push(seat);
-    });
+    // If no seats available or requesting more seats than available
+    if (availableSeats.length < numSeats) {
+      return null;
+    }
 
-    // Sort rows by number
-    const sortedRowNumbers = Object.keys(seatsByRow).sort((a, b) => a - b);
+    // Get rows that have booked seats
+    const rowsWithBookedSeats = new Set(bookedSeats.map(seat => seat.rowNumber));
 
-    // Try to find seats in each row
-    for (const rowNumber of sortedRowNumbers) {
-      const rowSeats = seatsByRow[rowNumber];
-      
-      // If we can find enough consecutive seats in this row
-      if (rowSeats.length >= numSeats) {
-        // Try to find the first group of consecutive seats
-        for (let i = 0; i <= rowSeats.length - numSeats; i++) {
-          const potentialGroup = rowSeats.slice(i, i + numSeats);
-          const isConsecutive = potentialGroup.every((seat, index) => {
-            if (index === 0) return true;
-            return seat.seatNumber === potentialGroup[index - 1].seatNumber + 1;
-          });
+    // Filter out seats from rows that already have bookings
+    const validSeats = sortedSeats.filter(seat => !rowsWithBookedSeats.has(seat.rowNumber));
 
-          if (isConsecutive) {
-            return potentialGroup.map(seat => seat.id);
-          }
-        }
+    // If we have enough valid seats, use only those
+    const seatsToUse = validSeats.length >= numSeats ? validSeats : sortedSeats;
+
+    // First, try to find consecutive seats anywhere (not just in same row)
+    for (let i = 0; i <= seatsToUse.length - numSeats; i++) {
+      const potentialGroup = seatsToUse.slice(i, i + numSeats);
+      const isConsecutive = potentialGroup.every((seat, index) => {
+        if (index === 0) return true;
+        return seat.seatNumber === potentialGroup[index - 1].seatNumber + 1;
+      });
+
+      if (isConsecutive) {
+        return potentialGroup.map(seat => seat.id);
       }
     }
 
-    // If we couldn't find enough consecutive seats in any row, try the next row
-    for (let i = 0; i < sortedRowNumbers.length; i++) {
-      const currentRow = parseInt(sortedRowNumbers[i]);
-      const nextRow = parseInt(sortedRowNumbers[i + 1]);
-      
-      if (nextRow) {
-        const currentRowSeats = seatsByRow[currentRow];
-        const nextRowSeats = seatsByRow[nextRow];
-        
-        // If we can combine seats from current and next row
-        if (currentRowSeats.length + nextRowSeats.length >= numSeats) {
-          const combinedSeats = [...currentRowSeats, ...nextRowSeats]
+    // If no consecutive seats found, find seats in clusters
+    const findSeatsInClusters = () => {
+      // Group available seats by row
+      const seatsByRow = {};
+      seatsToUse.forEach(seat => {
+        if (!seatsByRow[seat.rowNumber]) {
+          seatsByRow[seat.rowNumber] = [];
+        }
+        seatsByRow[seat.rowNumber].push(seat);
+      });
+
+      // Find all possible combinations of numSeats seats
+      const combinations = [];
+      for (let i = 0; i <= seatsToUse.length - numSeats; i++) {
+        combinations.push(seatsToUse.slice(i, i + numSeats));
+      }
+
+      // Score each combination based on row grouping and proximity to booked seats
+      const scoredCombinations = combinations.map(combo => {
+        // Sort the combo by seat number for consistent analysis
+        const sortedCombo = [...combo].sort((a, b) => a.seatNumber - b.seatNumber);
+
+        // Count seats in each row for this combination
+        const seatsInRow = {};
+        sortedCombo.forEach(seat => {
+          seatsInRow[seat.rowNumber] = (seatsInRow[seat.rowNumber] || 0) + 1;
+        });
+
+        // Calculate maximum consecutive seats in any row
+        let maxConsecutiveInRow = 0;
+        Object.entries(seatsInRow).forEach(([rowNum, count]) => {
+          const rowSeats = sortedCombo
+            .filter(s => s.rowNumber === parseInt(rowNum))
             .sort((a, b) => a.seatNumber - b.seatNumber);
           
-          // Try to find consecutive seats in the combined set
-          for (let j = 0; j <= combinedSeats.length - numSeats; j++) {
-            const potentialGroup = combinedSeats.slice(j, j + numSeats);
-            const isConsecutive = potentialGroup.every((seat, index) => {
-              if (index === 0) return true;
-              return seat.seatNumber === potentialGroup[index - 1].seatNumber + 1;
-            });
-
-            if (isConsecutive) {
-              return potentialGroup.map(seat => seat.id);
+          let currentConsecutive = 1;
+          let maxConsecutive = 1;
+          
+          for (let i = 1; i < rowSeats.length; i++) {
+            if (rowSeats[i].seatNumber === rowSeats[i-1].seatNumber + 1) {
+              currentConsecutive++;
+              maxConsecutive = Math.max(maxConsecutive, currentConsecutive);
+            } else {
+              currentConsecutive = 1;
             }
           }
-        }
-      }
-    }
+          
+          maxConsecutiveInRow = Math.max(maxConsecutiveInRow, maxConsecutive);
+        });
 
-    return null;
+        // Calculate spread (difference between highest and lowest seat numbers)
+        const spread = sortedCombo[sortedCombo.length - 1].seatNumber - sortedCombo[0].seatNumber;
+
+        // Calculate adjacency score (how many seats are next to each other)
+        let adjacencyScore = 0;
+        for (let i = 1; i < sortedCombo.length; i++) {
+          const gap = sortedCombo[i].seatNumber - sortedCombo[i-1].seatNumber;
+          if (gap === 1) {
+            adjacencyScore += 10000;
+          } else {
+            // Penalize based on gap size
+            adjacencyScore -= gap * 5000;
+          }
+        }
+
+        // Calculate row transitions
+        const rowTransitions = new Set(sortedCombo.map(s => s.rowNumber)).size - 1;
+        const rowTransitionPenalty = rowTransitions * 15000;
+
+        // Calculate final score
+        const score = (maxConsecutiveInRow * 20000) +  // Heavily reward consecutive seats
+                     adjacencyScore +                   // Reward adjacent seats
+                     (validSeats.length >= numSeats ? 50000 : 0) - // Bonus for using completely free rows
+                     (spread * 2000) -                 // Penalize spread
+                     rowTransitionPenalty;             // Penalize row changes
+
+        return {
+          seats: combo,
+          score,
+          maxConsecutive: maxConsecutiveInRow,
+          spread,
+          rowTransitions
+        };
+      });
+
+      // Sort by score (highest first)
+      scoredCombinations.sort((a, b) => b.score - a.score);
+
+      // Return the highest scoring combination
+      return scoredCombinations[0].seats.map(seat => seat.id);
+    };
+
+    return findSeatsInClusters();
   };
 
   const handleSeatNumberChange = (value) => {
