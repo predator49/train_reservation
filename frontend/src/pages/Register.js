@@ -110,12 +110,20 @@ const Register = () => {
         bg="white"
       >
         <Center mb={6}>
-          <Image
-            src="/train-logo.png"
-            alt="Train Logo"
-            boxSize="100px"
-            objectFit="contain"
-          />
+          <Box
+            bg="blue.500"
+            p={4}
+            borderRadius="full"
+            color="white"
+            fontSize="3xl"
+            width="100px"
+            height="100px"
+            display="flex"
+            alignItems="center"
+            justifyContent="center"
+          >
+            🚂
+          </Box>
         </Center>
 
         <VStack spacing={6} align="stretch">
